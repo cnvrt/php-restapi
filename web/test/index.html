@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Tester</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+        }
+        .response {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+        table{
+          width: 100%;
+          padding: 5px;
+          border: 1px solid #ccc;
+        }
+        table, tr, th, td {
+          padding: 5px;
+          background-color: #f9f9f9;
+        }
+        .th, .td  {
+          padding: 5px;
+          border: 1px solid #ccc;
+          display: grid;
+          justify-content: center;
+        }
+        .hr, hr {
+          padding: 0;
+          margin: 0;
+        }
+        
+        .td.action {
+          cursor: pointer;
+        }
+        pre {font-weight: bold;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API Tester</h1>
+        <input type="text" name="" id="baseurl" value="./../" />
+        <h2>List All Recipes & Search Recipes</h2>
+        <button id="listRecipes">List All Recipes</button>
+        <input type="text" name="searchtxt" id="searchtxt" value="Burger" />
+        <button id="searchRecipes">Search Recipes</button>
+        <div id="list2table">
+        </div>
+        <div id="listRecipesResponse" class="response list"></div>
+
+        <h2>Create, Update, Delete, Rate for Recipe</h2>
+        <h2><pre id="selectedRecipeData" class="response" contenteditable>
+{
+  "name" : "Recipe Name", 
+  "prep_time" : 30, 
+  "difficulty" : 2, 
+  "vegetarian" : false 
+}</pre></h2>
+        <button id="createRecipe">Create Recipe</button>
+        <button id="updateRecipe">Update Recipe</button>
+        <button id="deleteRecipe">Delete Recipe</button>
+        <button id="rateRecipe">Rate Recipe</button>
+        <h2><pre style="min-height: 250px;" id="selectedRecipeResponse" class="response"></pre></h2>
+    </div>
+
+    <script>
+        // const baseUrl = 'http://recipes-api.a';
+        // let recipeId = '66a3b2f5f4bef532560acd57';
+        // const baseUrl = '/api-r';
+        var baseUrl = $("#baseurl").val();
+        const defaultResponse = { error: `No recipe ID(_id:{'$oid':''}) available.`, suggestion: `Select a recipe from recipes table/list.` };
+        
+        
+
+        function displayResponse(selector, response, allrecipe=true) {
+          allrecipe?allRecipe():'';
+          $(selector).text(JSON.stringify(response, null, 2));
+        }
+        function allRecipe(){
+          baseUrl = $("#baseurl").val();
+          $.ajax({
+              url: `${baseUrl}/recipes`,
+              method: 'GET',
+              success: function(response) {
+                  set_tbl(response);
+              }
+          });
+        }
+        function set_tbl(jsd){
+          var td="";
+          $.each(jsd, function(i, row) {
+            td+=`
+            <tr>
+              <td><div class="td">${i+1}</div></td>
+              <td><div class="td">${row['name']}</div></td>
+              <td><div class="td">${row['prep_time']}</div></td>
+              <td><div class="td">${row['difficulty']}</div></td>
+              <td><div class="td">${row['vegetarian']}</div></td>
+              <td><div class="td action" onclick='go2recipe("${row['_id']['$oid']}")'>Get Recipe</div></td>
+            </tr>`;
+          });
+          var txt = `
+          <table>
+            <tr>
+              <th><div class="th">Sr.</div></th>
+              <th><div class="th">Recipe Name</div></th>
+              <th><div class="th">Take Minutes</div></th>
+              <th><div class="th">Difficulty</div></th>
+              <th><div class="th">Veg</div></th>
+              <th><div class="th">Actions</div></th>
+            </tr>
+            <tr class="hr"><td class="hr" colspan="6"><hr></td></tr>
+            ${td}
+          </table>`;
+          $("#list2table").html(txt);
+          $('#listRecipesResponse').text(JSON.stringify(jsd, null, 2));
+        }
+        window.onload = () => {allRecipe();};
+
+        $('#listRecipes').click(function() {allRecipe('#listRecipesResponse');});
+        
+        function go2recipe(recipeId){
+          baseUrl = $("#baseurl").val();
+          document.getElementById("selectedRecipeData").scrollIntoView();
+          
+          if (recipeId) {
+              $.ajax({
+                  url: `${baseUrl}/recipes/${recipeId}`,
+                  method: 'GET',
+                  success: function(response) {
+                    response['rating']=5;
+                    displayResponse('#selectedRecipeData', response, false);
+                  }
+              });
+          } else {
+              displayResponse('#selectedRecipeData', defaultResponse);
+          }
+        }
+        const inj = (keys, obj) => keys.every(key => key in obj);
+        $('#createRecipe').click(function() {
+          baseUrl = $("#baseurl").val();
+          const nRec = JSON.parse($("#selectedRecipeData").html());
+          let recipeId= '';
+          let haveRating = false;
+          const rateRecipe = {rating:0};
+          
+          ("_id" in nRec)? delete nRec['_id']:'';
+          if('rating' in nRec){ 
+            rateRecipe.rating=nRec.rating;
+            haveRating=true; 
+            delete nRec['rating']; 
+          }else{ haveRating=false; }
+          if(inj(["name", "prep_time", "difficulty", "vegetarian"], nRec) ){
+            $.ajax({
+              url: `${baseUrl}/recipes`,
+              method: 'POST',
+              contentType: 'application/json',
+              data: JSON.stringify(nRec),
+              success: function(response) {
+                recipeId = response._id;
+                
+                if(haveRating){
+                  $.ajax({
+                    url: `${baseUrl}/recipes/${recipeId}/rating`,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(rateRecipe),
+                    success: function(res2) {
+                      // console.log(res2);
+                      response['rating']=res2;
+                      displayResponse('#selectedRecipeResponse', response);
+                    },
+                    error: function (xhr,textStatus, errorThrown) {
+                      Success = false;
+                      console.log(xhr.responseText);
+                    }
+                  });
+                }
+                displayResponse('#selectedRecipeResponse', response);
+              }
+            });
+          } else{alert("Something Missing/Wrong!");}
+        });
+
+
+        $('#updateRecipe').click(function() {
+          baseUrl = $("#baseurl").val();
+          var selectedData = JSON.parse($("#selectedRecipeData").html());
+          if ('_id' in selectedData) {
+            if('$oid' in selectedData['_id']){
+              const recipeId = selectedData['_id']['$oid'];
+              delete selectedData['_id'];
+              'rating' in selectedData? delete selectedData['rating'] : null;
+              // console.log(selectedData);
+              const updateData = selectedData;
+              $.ajax({
+                url: `${baseUrl}/recipes/${recipeId}`,
+                method: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify(updateData),
+                success: function(response) {
+                  displayResponse('#selectedRecipeResponse', response);
+                }
+              });
+            } else{ displayResponse('#selectedRecipeResponse', defaultResponse); }
+          } else {
+            displayResponse('#selectedRecipeResponse', defaultResponse);
+          }
+        });
+
+        $('#deleteRecipe').click(function() {
+          baseUrl = $("#baseurl").val();
+          const selectedData = JSON.parse($("#selectedRecipeData").html());
+          if ('_id' in selectedData) {
+            if('$oid' in selectedData['_id']){
+              const recipeId = selectedData['_id']['$oid'];
+              $.ajax({
+                url: `${baseUrl}/recipes/${recipeId}`,
+                method: 'DELETE',
+                success: function(response) {
+                  displayResponse('#selectedRecipeResponse', response);
+                }
+              });
+            } else { displayResponse('#selectedRecipeResponse', defaultResponse); }
+          } else { displayResponse('#selectedRecipeResponse', defaultResponse); }
+        });
+
+        $('#rateRecipe').click(function() {
+          baseUrl = $("#baseurl").val();
+          const selectedData = JSON.parse($("#selectedRecipeData").html());
+          if ('_id' in selectedData) {
+            if('$oid' in selectedData['_id']){
+              recipeId = selectedData['_id']['$oid'];
+              const rateRecipe = {
+                rating: selectedData['rating']
+              };
+              // console.log(rateRecipe);
+              $.ajax({
+                url: `${baseUrl}/recipes/${recipeId}/rating`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(rateRecipe),
+                success: function(response) {
+                  // console.log(response);
+                  displayResponse('#selectedRecipeResponse', response);
+                },
+                error: function (xhr,textStatus, errorThrown) {
+                  Success = false;
+                  console.log(xhr.responseText);
+                }
+              });
+            } else { displayResponse('#selectedRecipeResponse', defaultResponse); }
+          } else { displayResponse('#selectedRecipeResponse', defaultResponse); }
+        });
+
+        $('#searchRecipes').click(function() {
+            baseUrl = $("#baseurl").val();
+            const searchQuery = $('#searchtxt').val();
+            $.ajax({
+                url: `${baseUrl}/search?q=${searchQuery}`,
+                method: 'GET',
+                success: function(response) {
+                    set_tbl(response);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

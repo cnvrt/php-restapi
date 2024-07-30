@@ -1,0 +1,35 @@
+#version: '3'
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: .docker/nginx/Dockerfile
+    volumes:
+      - ./:/var/www/html
+    image: nginx:alpine
+    ports:
+      - '8080:80'
+    networks:
+      - internal
+  php:
+    image: php:fpm-alpine
+    volumes:
+      - ./:/var/www/html
+      - ./config/php.ini:/usr/local/etc/php/php.ini
+      - ./config/mongodb.so:/usr/local/lib/php/extensions/no-debug-non-zts-20230831/mongodb.so
+    networks:
+      - internal
+    depends_on:
+      - mongodb
+  mongodb:
+    image: mongo:latest
+    networks:
+      - internal
+    volumes:
+      - mongodb_data:/data/db
+networks:
+  internal:
+    driver: bridge
+volumes:
+  mongodb_data:
